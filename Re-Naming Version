@@ -1,0 +1,93 @@
+# Install required packages (only if not already installed)
+packages <- c("dataRetrieval", "fs", "dplyr")
+new_packages <- packages[!(packages %in% installed.packages()[,"Package"])]
+if(length(new_packages)) install.packages(new_packages)
+
+# Load libraries
+library(dataRetrieval)
+library(fs)
+library(dplyr)
+
+# ------------------- Retrieve Streamflow Data -------------------
+# Define USGS station ID (Example: Rocky Branch - 0208735012)
+site_number <- "0208735012"
+
+# Define the date range for streamflow data (YYYY-MM-DD)
+start_date <- "2025-02-11"
+end_date <- "2025-02-18"
+
+# Set the parameter of choice
+parameter <- "00060"  # "00060" = discharge (cfs), "00035" = precipitation (mm)
+
+# Define the parameter threshold for "significant" values
+threshold <- 0.5  # Adjust as needed
+
+# Retrieve streamflow data
+streamflow_data <- readNWISdv(site_number, parameterCd = parameter, startDate = start_date, endDate = end_date)
+
+# Identify correct column name dynamically
+flow_column <- grep(parameter, names(streamflow_data), value = TRUE)
+
+# Check if the parameter column exists
+if (length(flow_column) == 0) {
+  stop("Error: The expected parameter column is not found in the streamflow data.")
+}
+
+# Filter for significant flow (e.g., flow > threshold)
+significant_flow_data <- streamflow_data[streamflow_data[[flow_column]] > threshold, ]  
+
+# Extract dates where flow was significant
+significant_flow_dates <- as.Date(significant_flow_data$Date)
+
+# Print the significant flow dates
+print(significant_flow_dates)
+
+
+# ------------------- Process Video/Image Files -------------------
+
+# Set the directory where AVI/JPG files are stored
+file_directory <- "/Users/birgand.lab/Desktop/2.17.25 Softball"  # Change as needed
+
+# Get list of AVI/JPG files
+video_image_files <- list.files(file_directory, pattern = "\\.(AVI|JPG)$", full.names = TRUE)
+
+# Rename files to include date if necessary (optional)
+rename_files <- TRUE  # Set to FALSE if no renaming is needed
+
+if (rename_files) {
+  for (file in video_image_files) {
+    new_name <- paste0(format(Sys.time(), "%Y-%m-%d"), "_", basename(file))
+    file.rename(file, file.path(file_directory, new_name))
+  }
+}
+
+# Get file info (modification date)
+file_info <- file.info(video_image_files)
+
+# Extract and convert modification times to Date
+file_dates <- as.Date(file_info$mtime)
+
+# Filter files that match significant streamflow dates
+matched_files <- video_image_files[file_dates %in% significant_flow_dates]
+
+# Print matched files
+print(matched_files)
+
+# ------------------- Move Significant Files -------------------
+
+# Define the destination folder for significant files
+new_folder <- "/Users/birgand.lab/Desktop/2-17-25 Softball Good 2"
+
+# Create the folder if it does not exist
+if (!dir.exists(new_folder)) {
+  dir.create(new_folder)
+}
+
+# Copy matched files to new folder
+for (file in matched_files) {
+  destination <- file.path(new_folder, basename(file))
+  file.copy(file, destination)
+}
+
+# Print completion message
+cat("Matched video files have been copied to:", new_folder)
