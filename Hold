@@ -1,0 +1,82 @@
+# Load necessary libraries
+install.packages(c("dataRetrieval", "fs", "dplyr", "lubridate", "stringr"))
+library(dataRetrieval)
+library(stringr)
+library(fs)
+library(dplyr)
+library(lubridate)
+library(tools)  # For handling file extensions
+
+# Set the directory where image/video files are stored
+file_directory <- normalizePath("/Users/birgand.lab/Desktop/SOFTBALL/5.10.2024 Softball")  # Change as needed
+
+# List all AVI/JPG files in the directory (case insensitive)
+image_files <- list.files(file_directory, pattern = "\\.(AVI|JPG)$", full.names = TRUE, recursive = TRUE)
+print(image_files)
+# Rename files based on modification time
+for (file in image_files) {
+  file_info <- file.info(file)
+  mod_time <- file_info$mtime
+  
+  # Ensure modification time is not NA
+  if (is.na(mod_time)) next
+  
+  # Extract file extension (keeping the dot)
+  file_extension <- paste0(".", file_ext(file))  # Fixes missing dot issue
+  # Format timestamp as YYYY-MM-DD_HH-MM-SS
+  new_name <- paste0("SB_", format(mod_time, "%Y-%m-%d_%H-%M-%S"), file_extension)
+  
+  # Define new file path
+  new_path <- file.path(file_directory, new_name)
+  
+  # Debugging - Print old and new filenames before renaming
+  cat("Renaming:", file, "->", new_path, "\n")
+  
+  # Rename file
+  if (!file.rename(file, new_path)) {
+    cat("Error renaming:", file, "\n")  # If renaming fails, print an error message
+  }
+}
+
+cat("All files have been renamed based on modification time.\n")
+print(new_name)
+# ==============================
+# RETRIEVE SIGNIFICANT FLOW DATES
+# ==============================
+
+# USGS Station ID
+site_number <- "0208735012"  
+
+# Date range
+start_date <- "2024-05-02"
+end_date <- "2024-05-11"
+
+# Parameter: Discharge (00060) or Precipitation (00035 for mm, 00045 for inches)
+parameter <- "00060"
+
+# Flow threshold for significance
+threshold <- 1
+
+# Retrieve streamflow data
+streamflow_data <- readNWISuv(site_number, parameterCd = parameter, startDate = start_date, endDate = end_date)
+
+# Ensure data retrieval was successful
+if (nrow(streamflow_data) == 0) {
+  stop("No streamflow data retrieved for the given date range.")
+}
+
+# Filter for significant flow
+significant_flow_data <- streamflow_data %>% filter(X_00060_00000 > threshold)
+
+# Extract significant flow dates
+significant_flow_dates <- as_datetime(significant_flow_data$dateTime)
+
+# If no significant flow dates are found, exit early
+if (length(significant_flow_dates) == 0) {
+  stop("No significant flow dates found. Exiting script.")
+}
+
+cat("Significant flow dates:\n")
+print(significant_flow_dates)
+
+# ============================
